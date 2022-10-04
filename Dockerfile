@@ -20,15 +20,6 @@ RUN apt-get update && \
     chmod +x *.sh && \
     chmod +x *.py
 
-    # for GPU docker running (Note that you do not need to install the CUDA Toolkit on the host system, but the NVIDIA driver needs to be installed)
-    # apt-get -y install cuda-drivers 
-    
-
-    
-#    pip install git+https://github.com/tensorflow/docs
-
-
-
-# set inference script as "docker func"
-# ENTRYPOINT ["./model_inference.py"]
-# CMD ["test_app_video.mp4"]
+# set inference script
+ENTRYPOINT ["./model_inference.py"]
+CMD ["test_app_video.mp4"]

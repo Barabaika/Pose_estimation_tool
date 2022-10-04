@@ -15,21 +15,17 @@ else
 fi
 
 # get absolute path of tmp folder (obligatory for making volume)
-tmp_input_files_path= readlink -f ./tmp_input_files
+tmp_input_files_path=$(readlink -f ./tmp_input_files)
+
 # STEP2: create container + run inference enterypoint
 # you can add many images in one input in comand line argument way 
-
-# -v ${tmp_input_files_path}:/usr/src/app/input \
 docker run \
-    -it pose_estimation_image \
-    bash
-    # -d --name pose_estimation_container model_inference.py $@
+    --name pose_estimation_container --rm \
+    -v ${tmp_input_files_path}:/usr/src/app/tmp_input_files/ \
+    -it pose_estimation_image bash \
+     model_inference.py $@
 
-# STEP3: remove tmp files
+# STEP3: copy outputs to result folder and remove tmp folder
+mkdir ../Pose_estim_result/
+cp ./tmp_input_files/*_output.mp4 ../Pose_estim_result/
 rm -r tmp_input_files
-
-# STEP2: copy output file from docker container to local dir 
-# docker cp <container_name>:/output_file_name ./output_file_name
-# docker cp 
-
-# STEP3 stop and remove container

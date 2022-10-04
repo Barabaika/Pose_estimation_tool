@@ -1,25 +1,32 @@
 #!/usr/bin/env python
 
+import cv2
+import matplotlib.pyplot as plt 
+from IPython.display import HTML, display
+import numpy as np 
+import tensorflow as tf 
+import tensorflow_hub as hub
+import os
+
 # script with functions used in model inference.py
 
-def loop(frame, keypoints, threshold=0.11):
+def loop(frame, keypoints, EDGE_COLORS, out_size, threshold=0.11):
     """
     Main loop : Draws the keypoints and edges for each instance
     """
-    
     # Loop through the results
     for instance in keypoints: 
         # Draw the keypoints and get the denormalized coordinates
-        denormalized_coordinates = draw_keypoints(frame, instance, threshold)
+        denormalized_coordinates = draw_keypoints(frame, instance, out_size, threshold)
         # Draw the edges
         draw_edges(denormalized_coordinates, frame, EDGE_COLORS, threshold)
 
 
-def draw_keypoints(frame, keypoints, threshold=0.11):
+def draw_keypoints(frame, keypoints, out_size, threshold=0.11):
     """Draws the keypoints on a image frame"""
     
     # Denormalize the coordinates : multiply the normalized coordinates by the input_size(width,height)
-    denormalized_coordinates = np.squeeze(np.multiply(keypoints, [WIDTH,HEIGHT,1]))
+    denormalized_coordinates = np.squeeze(np.multiply(keypoints, [out_size[0],out_size[1],1]))
     #Iterate through the points
     for keypoint in denormalized_coordinates:
         # Unpack the keypoint values : y, x, confidence score
@@ -63,27 +70,9 @@ def draw_edges(denormalized_coordinates, frame, edges_colors, threshold=0.11):
             )
 
 
-def progress(value, max=100):
-    """
-    Returns an HTML progress bar with a certain value. Used within each step
-    """
-    
-    
-    return HTML("""
-      <progress
-          value='{value}'
-          max='{max}',
-          style='width: 100%'
-      >
-          {value}
-      </progress>
-  """.format(value=value,
-                max=max))
-
-
 def load_video(input_video_path):
     """
-    Loads the viseo and return its details
+    Loads the video and return its details
     """
     
     # Load the video
@@ -93,12 +82,6 @@ def load_video(input_video_path):
     # Display parameter
     print(f"Frame count: {frame_count}")
     
-    """""
-    Initialize the video writer 
-    We'll append each frame and its drawing to a vector, then stack all the frames to obtain a sequence (video). 
-    """
-    # output_frames = []
-    
     # Get the initial shape (width, height)
     initial_shape = []
     initial_shape.append(int(video.get(cv2.CAP_PROP_FRAME_WIDTH)))
@@ -107,23 +90,26 @@ def load_video(input_video_path):
     # return video, frame_count, output_frames, initial_shape
     return video, frame_count, initial_shape
 
-def run_inference(input_video_path, out_video_path):
+def run_inference(input_video_path, out_video_path, model_func, EDGE_COLORS, FPS = 20, OUT_SIZE = None):
     """
     Runs inferences then starts the main loop for each frame
     """
     
     # Load the video
     video, frame_count, initial_shape = load_video(input_video_path)
-    # Set the progress bar to 0. It ranges from the first to the last frame
-    bar = display(progress(0, frame_count-1), display_id=True)
+    
+    if not OUT_SIZE:
+      out_size = (initial_shape[0], initial_shape[1])
+    else:
+      out_size = OUT_SIZE
     
     # Create output video writer 
-    fourcc = cv2.VideoWriter_fourcc(*'MP42')
+    fourcc = cv2.VideoWriter_fourcc(*'mp4v')
     video_writer = cv2.VideoWriter(
         out_video_path, 
         fourcc, 
         float(FPS), 
-        (initial_shape[1], initial_shape[2])
+        out_size
     )
 
     
@@ -142,14 +128,14 @@ def run_inference(input_video_path, out_video_path):
         
         # Copy the frame
         image = frame.copy()
-        image = cv2.resize(image, (WIDTH,HEIGHT))
+        image = cv2.resize(image, out_size)
         # Resize to the target shape and cast to an int32 vector
-        input_image = tf.cast(tf.image.resize_with_pad(image, WIDTH, HEIGHT), dtype=tf.int32)
+        input_image = tf.cast(tf.image.resize_with_pad(image, out_size[0], out_size[1]), dtype=tf.int32)
         # Create a batch (input tensor)
         input_image = tf.expand_dims(input_image, axis=0)
 
         # Perform inference
-        results = movenet(input_image)
+        results = model_func(input_image)
         """
         Output shape :  [1, 6, 56] ---> (batch size), (instances), (xy keypoints coordinates and score from [0:50] 
         and [ymin, xmin, ymax, xmax, score] for the remaining elements)
@@ -163,7 +149,7 @@ def run_inference(input_video_path, out_video_path):
         keypoints = results["output_0"].numpy()[:,:,:51].reshape((6,17,3))
 
         # Loop through the results
-        loop(image, keypoints, threshold=0.11)
+        loop(image, keypoints, EDGE_COLORS, out_size, threshold=0.11)
         
         # Get the output frame : reshape to the original size
         frame_rgb = cv2.cvtColor(
@@ -174,12 +160,8 @@ def run_inference(input_video_path, out_video_path):
             cv2.COLOR_BGR2RGB # OpenCV processes BGR images instead of RGB
         ) 
         
-        # Add the drawings to the output frames
+        # Add resulted frame to the video_writer
         video_writer.write(frame_rgb)
-        # Update the progress bar
-        bar.update(progress(current_index, frame_count-1))
-
-        
     
     # Release the object
     video_writer.release()
