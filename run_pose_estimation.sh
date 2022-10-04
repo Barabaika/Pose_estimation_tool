@@ -9,6 +9,9 @@ echo $#
 if [ $# -ge 1 ]
 then
     cp $@ ./tmp_input_files/
+else
+# if no videos passed as argument - add test_video for demo 
+    cp test_app_video.mp4 ./tmp_input_files/
 fi
 
 # get absolute path of tmp folder (obligatory for making volume)
