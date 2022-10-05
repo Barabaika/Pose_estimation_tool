@@ -1,5 +1,6 @@
 # pull official base image
 FROM python:3.9
+# tensorflow:latest
 
 # set work directory
 WORKDIR /usr/src/app
@@ -10,16 +11,15 @@ ENV PYTHONUNBUFFERED 1
 
 # copy project
 COPY . /usr/src/app/
-# COPY ./install_files /usr/src/app/install_files
 
 # install recuired packages 
 RUN apt-get update && \
     pip install --upgrade pip && \
     apt-get install -y libgl1 && \
-    pip install -r ./install_files/requirements.txt && \
+    pip install -r ./help_files/requirements.txt && \
     chmod +x *.sh && \
-    chmod +x *.py
+    chmod +x ./help_files/*.py
 
 # set inference script
-ENTRYPOINT ["./model_inference.py"]
+ENTRYPOINT ["./main/model_inference.py"]
 CMD ["test_app_video.mp4"]

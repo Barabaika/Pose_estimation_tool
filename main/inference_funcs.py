@@ -10,23 +10,21 @@ import os
 
 # script with functions used in model inference.py
 
-def loop(frame, keypoints, EDGE_COLORS, out_size, threshold=0.11):
+def draw(frame, keypoints, EDGE_COLORS, size, threshold=0.11):
     """
-    Main loop : Draws the keypoints and edges for each instance
+    Draws the keypoints and edges
     """
-    # Loop through the results
-    for instance in keypoints: 
-        # Draw the keypoints and get the denormalized coordinates
-        denormalized_coordinates = draw_keypoints(frame, instance, out_size, threshold)
-        # Draw the edges
-        draw_edges(denormalized_coordinates, frame, EDGE_COLORS, threshold)
+    # Draw the keypoints and get the denormalized coordinates
+    denormalized_coordinates = draw_keypoints(frame, keypoints, size, threshold)
+    # Draw the edges
+    draw_edges(denormalized_coordinates, frame, EDGE_COLORS, threshold)
 
 
-def draw_keypoints(frame, keypoints, out_size, threshold=0.11):
+def draw_keypoints(frame, keypoints, size, threshold=0.11):
     """Draws the keypoints on a image frame"""
     
     # Denormalize the coordinates : multiply the normalized coordinates by the input_size(width,height)
-    denormalized_coordinates = np.squeeze(np.multiply(keypoints, [out_size[0],out_size[1],1]))
+    denormalized_coordinates = np.squeeze(np.multiply(keypoints, [size[0],size[1],1]))
     #Iterate through the points
     for keypoint in denormalized_coordinates:
         # Unpack the keypoint values : y, x, confidence score
@@ -90,7 +88,7 @@ def load_video(input_video_path):
     # return video, frame_count, output_frames, initial_shape
     return video, frame_count, initial_shape
 
-def run_inference(input_video_path, out_video_path, model_func, EDGE_COLORS, FPS = 20, OUT_SIZE = None):
+def run_inference(input_video_path, out_video_path, model_func, EDGE_COLORS, FPS = 20, INFERENCE_SIZE = (256, 256)):
     """
     Runs inferences then starts the main loop for each frame
     """
@@ -98,10 +96,6 @@ def run_inference(input_video_path, out_video_path, model_func, EDGE_COLORS, FPS
     # Load the video
     video, frame_count, initial_shape = load_video(input_video_path)
     
-    if not OUT_SIZE:
-      out_size = (initial_shape[0], initial_shape[1])
-    else:
-      out_size = OUT_SIZE
     
     # Create output video writer 
     fourcc = cv2.VideoWriter_fourcc(*'mp4v')
@@ -109,12 +103,17 @@ def run_inference(input_video_path, out_video_path, model_func, EDGE_COLORS, FPS
         out_video_path, 
         fourcc, 
         float(FPS), 
-        out_size
+        (initial_shape[0], initial_shape[1])
     )
-
+    # Create keypoints result dict for storing keypoints from each frame
+    keypoints_dict = {}
     
+    # Create frame counter for storing keypoints to dict
+    frame_counter = -1
     # Loop while the video is opened
     while video.isOpened():
+        
+        frame_counter += 1
         
         # Capture the frame
         ret, frame = video.read()
@@ -128,28 +127,25 @@ def run_inference(input_video_path, out_video_path, model_func, EDGE_COLORS, FPS
         
         # Copy the frame
         image = frame.copy()
-        image = cv2.resize(image, out_size)
+        image = cv2.resize(image, INFERENCE_SIZE)
         # Resize to the target shape and cast to an int32 vector
-        input_image = tf.cast(tf.image.resize_with_pad(image, out_size[0], out_size[1]), dtype=tf.int32)
+        input_image = tf.cast(tf.image.resize_with_pad(image, INFERENCE_SIZE[0], INFERENCE_SIZE[1]), dtype=tf.int32)
         # Create a batch (input tensor)
         input_image = tf.expand_dims(input_image, axis=0)
 
         # Perform inference
         results = model_func(input_image)
-        """
-        Output shape :  [1, 6, 56] ---> (batch size), (instances), (xy keypoints coordinates and score from [0:50] 
-        and [ymin, xmin, ymax, xmax, score] for the remaining elements)
-        First, let's resize it to a more convenient shape, following this logic : 
-        - First channel ---> each instance
-        - Second channel ---> 17 keypoints for each instance
-        - The 51st values of the last channel ----> the confidence score.
-        Thus, the Tensor is reshaped without losing important information. 
-        """
         
-        keypoints = results["output_0"].numpy()[:,:,:51].reshape((6,17,3))
-
-        # Loop through the results
-        loop(image, keypoints, EDGE_COLORS, out_size, threshold=0.11)
+        # initial shape of res is (1,1,17,3)
+        keypoints = results["output_0"][0][0]
+        
+        # Draw the results to frame
+        draw(image, keypoints, EDGE_COLORS, INFERENCE_SIZE, threshold=0.11)
+        
+        # Denormalizing resulted keypoints to initial scale and crop 3 column with scores
+        keypoints = np.multiply(keypoints[:, 0:2], [initial_shape[0], initial_shape[1]])
+        # Adding to resulted dict
+        keypoints_dict['pose_' + str(frame_counter)] = keypoints.tolist()
         
         # Get the output frame : reshape to the original size
         frame_rgb = cv2.cvtColor(
@@ -168,5 +164,5 @@ def run_inference(input_video_path, out_video_path, model_func, EDGE_COLORS, FPS
     
     print("Completed !")
     
-    return keypoints
+    return keypoints_dict
 
