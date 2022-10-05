@@ -9,8 +9,8 @@ Based on Movenet model
 
 ## 📝 Requirements
 
-Docker
-Git
++ __Docker__ (Docker Desktop or Docker compose (https://docs.docker.com/desktop/))
++ __Git__ (https://github.com/git-guides/install-git)
 
 ## ⚙️ Installation
 
