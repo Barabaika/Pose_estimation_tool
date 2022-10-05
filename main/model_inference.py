@@ -37,7 +37,9 @@ for input_file_name in input_files_names_list:
         input_file_path, 
         out_video_name,
         movenet,
-        EDGE_COLORS
+        EDGE_COLORS,
+        use_cropping = True,
+        FPS=20
     )
     
     print("--- %s seconds ---" % (time.time() - start_time))

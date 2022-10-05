@@ -1,5 +1,54 @@
 #@title Cropping Algorithm
 
+import tensorflow as tf
+import tensorflow_hub as hub
+import numpy as np
+import cv2
+
+# Dictionary that maps from joint names to keypoint indices.
+KEYPOINT_DICT = {
+    'nose': 0,
+    'left_eye': 1,
+    'right_eye': 2,
+    'left_ear': 3,
+    'right_ear': 4,
+    'left_shoulder': 5,
+    'right_shoulder': 6,
+    'left_elbow': 7,
+    'right_elbow': 8,
+    'left_wrist': 9,
+    'right_wrist': 10,
+    'left_hip': 11,
+    'right_hip': 12,
+    'left_knee': 13,
+    'right_knee': 14,
+    'left_ankle': 15,
+    'right_ankle': 16
+}
+
+# Maps bones to a matplotlib color name.
+KEYPOINT_EDGE_INDS_TO_COLOR = {
+    (0, 1): 'm',
+    (0, 2): 'c',
+    (1, 3): 'm',
+    (2, 4): 'c',
+    (0, 5): 'm',
+    (0, 6): 'c',
+    (5, 7): 'm',
+    (7, 9): 'm',
+    (6, 8): 'c',
+    (8, 10): 'c',
+    (5, 6): 'y',
+    (5, 11): 'm',
+    (6, 12): 'c',
+    (11, 12): 'y',
+    (11, 13): 'm',
+    (13, 15): 'm',
+    (12, 14): 'c',
+    (14, 16): 'c'
+}
+
+
 # Confidence score to determine whether a keypoint prediction is reliable.
 MIN_CROP_KEYPOINT_SCORE = 0.11
 
@@ -144,17 +193,17 @@ def crop_and_resize(image, crop_region, crop_size):
       image, box_indices=[0], boxes=boxes, crop_size=crop_size)
   return output_image
 
-def run_inference(movenet, image, crop_region, crop_size):
+def inference_with_cropping(movenet, image, crop_region, crop_size):
   """Runs model inferece on the cropped region.
 
   The function runs the model inference on the cropped region and updates the
   model output to the original image coordinate system.
   """
   image_height, image_width, _ = image.shape
-  input_image = crop_and_resize(
-    tf.expand_dims(image, axis=0), crop_region, crop_size=crop_size)
+  input_image = tf.cast(crop_and_resize(
+    tf.expand_dims(image, axis=0), crop_region, crop_size=crop_size), dtype=tf.int32)
   # Run model inference.
-  keypoints_with_scores = movenet(input_image)
+  keypoints_with_scores = movenet(input_image)["output_0"].numpy()
   # Update the coordinates.
   for idx in range(17):
     keypoints_with_scores[0, 0, idx, 0] = (

@@ -8,6 +8,9 @@ import tensorflow as tf
 import tensorflow_hub as hub
 import os
 
+# Custom func for cropping
+from cropping import *
+
 # script with functions used in model inference.py
 
 def draw(frame, keypoints, EDGE_COLORS, size, threshold=0.11):
@@ -88,13 +91,17 @@ def load_video(input_video_path):
     # return video, frame_count, output_frames, initial_shape
     return video, frame_count, initial_shape
 
-def run_inference(input_video_path, out_video_path, model_func, EDGE_COLORS, FPS = 20, INFERENCE_SIZE = (256, 256)):
+def run_inference(input_video_path, out_video_path, model_func, EDGE_COLORS, use_cropping = True, FPS = 20, INFERENCE_SIZE = (256, 256)):
     """
     Runs inferences then starts the main loop for each frame
     """
     
     # Load the video
     video, frame_count, initial_shape = load_video(input_video_path)
+    
+    # for cropping:
+    if use_cropping:
+      crop_region = init_crop_region(INFERENCE_SIZE[0], INFERENCE_SIZE[1])
     
     
     # Create output video writer 
@@ -130,14 +137,23 @@ def run_inference(input_video_path, out_video_path, model_func, EDGE_COLORS, FPS
         image = cv2.resize(image, INFERENCE_SIZE)
         # Resize to the target shape and cast to an int32 vector
         input_image = tf.cast(tf.image.resize_with_pad(image, INFERENCE_SIZE[0], INFERENCE_SIZE[1]), dtype=tf.int32)
-        # Create a batch (input tensor)
-        input_image = tf.expand_dims(input_image, axis=0)
-
-        # Perform inference
-        results = model_func(input_image)
         
-        # initial shape of res is (1,1,17,3)
-        keypoints = results["output_0"][0][0]
+        # inference variant without cropping
+        if not use_cropping:
+          # Create a batch (input tensor)
+          input_image = tf.expand_dims(input_image, axis=0)
+
+          # Perform inference
+          results = model_func(input_image)
+        
+          # initial shape of res is (1,1,17,3)
+          keypoints = results["output_0"][0][0]
+        
+        # inference variant with cropping
+        else:
+          crop_size = INFERENCE_SIZE
+          keypoints = inference_with_cropping(model_func, input_image, crop_region, crop_size)
+          keypoints = keypoints[0][0]
         
         # Draw the results to frame
         draw(image, keypoints, EDGE_COLORS, INFERENCE_SIZE, threshold=0.11)
