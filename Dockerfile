@@ -1,6 +1,7 @@
 # pull official base image
-FROM python:3.9
+FROM tensorflow/tensorflow:latest
 # tensorflow:latest
+# FROM python:3.9
 
 # set work directory
 WORKDIR /usr/src/app
@@ -16,6 +17,7 @@ COPY . /usr/src/app/
 RUN apt-get update && \
     pip install --upgrade pip && \
     apt-get install -y libgl1 && \
+    apt-get install -y libglib2.0-0 && \
     pip install -r ./help_files/requirements.txt && \
     chmod +x *.sh && \
     chmod +x ./help_files/*.py

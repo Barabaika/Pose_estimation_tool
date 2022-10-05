@@ -2,5 +2,4 @@ opencv-python
 matplotlib
 ipython
 numpy
-tensorflow
 tensorflow_hub
